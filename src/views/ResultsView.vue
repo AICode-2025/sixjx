@@ -15,12 +15,12 @@
             <el-table-column label="平码" min-width="280">
               <template #default="{ row }">
                 <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
-                      class="ball flat-ball">{{ n }}</span>
+                      :class="ballClass(n, false)">{{ n }}</span>
               </template>
             </el-table-column>
             <el-table-column label="特码" width="80" align="center">
               <template #default="{ row }">
-                <span class="ball special-ball">{{ row.special }}</span>
+                <span :class="ballClass(row.special, true)">{{ row.special }}</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" align="center">
@@ -45,12 +45,12 @@
             <el-table-column label="平码" min-width="280">
               <template #default="{ row }">
                 <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
-                      class="ball flat-ball">{{ n }}</span>
+                      :class="ballClass(n, false)">{{ n }}</span>
               </template>
             </el-table-column>
             <el-table-column label="特码" width="80" align="center">
               <template #default="{ row }">
-                <span class="ball special-ball">{{ row.special }}</span>
+                <span :class="ballClass(row.special, true)">{{ row.special }}</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" align="center">
@@ -82,6 +82,23 @@ const loading = ref(false)
 const refreshing = ref(false)
 const hkList = ref([])
 const moList = ref([])
+
+// 波色映射
+const RED_WAVE = [1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46]
+const GREEN_WAVE = [5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49]
+
+function getWave(n) {
+  const num = Number(n)
+  if (RED_WAVE.includes(num)) return '红波'
+  if (GREEN_WAVE.includes(num)) return '绿波'
+  return '蓝波'
+}
+
+function ballClass(n, isSpecial) {
+  const wave = getWave(n)
+  const waveMap = { '红波': 'ball-red', '绿波': 'ball-green', '蓝波': 'ball-blue' }
+  return ['ball', waveMap[wave] || 'ball-blue', isSpecial ? 'ball-special' : 'ball-flat']
+}
 
 async function fetchData() {
   loading.value = true
@@ -168,10 +185,21 @@ onMounted(fetchData)
   font-weight: bold;
   color: #fff;
 }
-.flat-ball {
-  background: #409eff;
+.ball-red {
+  background: #e74c3c;
 }
-.special-ball {
-  background: #e6a23c;
+.ball-blue {
+  background: #3498db;
+}
+.ball-green {
+  background: #27ae60;
+}
+/* 特码：金色外环 */
+.ball-special {
+  box-shadow: 0 0 0 2px #f1c40f, 0 0 0 3px #e67e22;
+}
+/* 平码：白色细环 */
+.ball-flat {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.5);
 }
 </style>
