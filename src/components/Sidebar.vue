@@ -28,6 +28,10 @@
         <el-icon><Calendar /></el-icon>
         <span>期号管理</span>
       </el-menu-item>
+      <el-menu-item index="/results">
+        <el-icon><List /></el-icon>
+        <span>历史记录</span>
+      </el-menu-item>
       <el-menu-item index="/settings">
         <el-icon><Setting /></el-icon>
         <span>系统设置</span>
