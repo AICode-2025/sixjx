@@ -57,13 +57,13 @@ async function refreshMacau(c) {
 
 // ── 路由定义 ──
 
-// GET /api/init?code=xxx - 激活校验 + 返回完整数据
+// GET /api/init?code=xxx - 返回完整数据（code 可选，提供时校验激活码）
 aggregator.get('/init', async (c) => {
   const code = c.req.query('code')
-  if (!code) return c.json({ code: 1, message: '缺少参数 code' })
-
-  const verify = await verifyCode(c, code)
-  if (!verify.valid) return c.json({ code: 1, message: verify.message })
+  if (code) {
+    const verify = await verifyCode(c, code)
+    if (!verify.valid) return c.json({ code: 1, message: verify.message })
+  }
 
   // 并行拉取香港和澳门数据
   const [hk, mo] = await Promise.all([refreshHK(c), refreshMacau(c)])
