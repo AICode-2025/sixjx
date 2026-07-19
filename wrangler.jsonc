@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "znjx-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-07-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "directory": "dist/client"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "znjx-api",
+      "database_id": "5359b77a-58fe-47ae-b98e-7aa7e852caad"
+    }
+  ],
+  // routes: 自定义域名 api.znjx.cc → 请在 Cloudflare Dashboard 手动配置
+  "triggers": {
+    "crons": ["32-40/2 21 * * *"]
+  },
+  "vars": {
+    "JWT_SECRET": "znjx-admin-secret-20260717"
+  },
+  "build": {
+    "command": "npm run build"
+  }
+}
