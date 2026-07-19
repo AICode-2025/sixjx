@@ -5,11 +5,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <span>激活码管理</span>
           <div style="display:flex;gap:8px">
-            <el-button type="primary" size="small" @click="generateOne" :loading="creating">生成单个</el-button>
-            <el-select v-model="batchCount" style="width:80px" size="small">
-              <el-option v-for="n in [5,10,20,50,100]" :key="n" :label="n+'个'" :value="n" />
-            </el-select>
-            <el-button type="success" size="small" @click="generateBatch" :loading="batchLoading">批量生成</el-button>
+            <el-button type="primary" size="small" @click="showGenerate = true">生成</el-button>
           </div>
         </div>
       </template>
@@ -63,6 +59,18 @@
         />
       </div>
     </el-card>
+
+    <el-dialog v-model="showGenerate" title="生成激活码" width="360px" @close="genCount=1">
+      <el-form label-width="80px">
+        <el-form-item label="生成数量">
+          <el-input-number v-model="genCount" :min="1" :max="100" style="width:100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showGenerate = false">取消</el-button>
+        <el-button type="primary" @click="handleGenerate" :loading="genLoading">完成</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -79,9 +87,9 @@ const total = ref(0)
 const keyword = ref('')
 const statusFilter = ref('')
 
-const creating = ref(false)
-const batchCount = ref(10)
-const batchLoading = ref(false)
+const showGenerate = ref(false)
+const genCount = ref(1)
+const genLoading = ref(false)
 const selectedIds = ref([])
 
 function onSelectionChange(rows) {
@@ -125,29 +133,25 @@ async function fetchData() {
   }
 }
 
-async function generateOne() {
-  creating.value = true
+async function handleGenerate() {
+  const count = genCount.value
+  if (count < 1) return
+  genLoading.value = true
   try {
-    const data = await api.post('/api/activation')
-    ElMessage.success(`已生成：${data.code}`)
+    if (count === 1) {
+      const data = await api.post('/api/activation')
+      ElMessage.success(`已生成：${data.code}`)
+    } else {
+      const data = await api.post('/api/activation/batch', { count })
+      ElMessage.success(`已生成 ${data.codes.length} 个激活码`)
+    }
+    showGenerate.value = false
+    genCount.value = 1
     fetchData()
   } catch (err) {
     ElMessage.error(err.message)
   } finally {
-    creating.value = false
-  }
-}
-
-async function generateBatch() {
-  batchLoading.value = true
-  try {
-    const data = await api.post('/api/activation/batch', { count: batchCount.value })
-    ElMessage.success(`已生成 ${data.codes.length} 个激活码`)
-    fetchData()
-  } catch (err) {
-    ElMessage.error(err.message)
-  } finally {
-    batchLoading.value = false
+    genLoading.value = false
   }
 }
 
