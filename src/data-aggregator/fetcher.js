@@ -31,7 +31,8 @@ export async function fetchExternalAPI(url, { timeout = DEFAULT_TIMEOUT, retries
 
 /**
  * 从 D1 api_config 表读取外部 API URL
- * 未配置时使用 1234kj.com 默认值
+ * 支持 {year} 占位符，自动替换为当前年份
+ * 未配置时使用默认值
  */
 export async function getAPIUrl(c) {
   const configs = await c.env.DB.prepare(
@@ -41,8 +42,9 @@ export async function getAPIUrl(c) {
   for (const row of (configs.results || [])) {
     cfg[row.key] = row.value
   }
+  const year = new Date().getFullYear()
   return {
-    hk: cfg.api_url_hk || 'https://1234kj.com/api/opencode/2034?type=all',
-    mo: cfg.api_url_newmacau || 'https://1234kj.com/api/opencode/2033?type=all'
+    hk: (cfg.api_url_hk || 'https://1234kj.com/api/opencode/2034?type=all').replace(/\{year\}/g, year),
+    mo: (cfg.api_url_newmacau || 'https://history.macaumarksix.com/history/macaujc2/y/{year}').replace(/\{year\}/g, year)
   }
 }

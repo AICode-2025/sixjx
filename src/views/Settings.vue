@@ -17,13 +17,13 @@
       <h3 style="margin-bottom:16px">数据源配置</h3>
       <el-form :model="apiConfig" label-width="140px" style="max-width:700px">
         <el-form-item label="澳门数据API">
-          <el-input v-model="apiConfig.api_url_newmacau" placeholder="https://api3.marksix6.net/lottery_api.php?type=newMacau" size="small" />
+          <el-input v-model="apiConfig.api_url_newmacau" placeholder="https://history.macaumarksix.com/history/macaujc2/y/{year}" size="small" />
         </el-form-item>
         <el-form-item label="香港数据API">
-          <el-input v-model="apiConfig.api_url_hk" placeholder="https://api3.marksix6.net/lottery_api.php?type=hk" size="small" />
+          <el-input v-model="apiConfig.api_url_hk" placeholder="https://1234kj.com/api/opencode/2034?type=all" size="small" />
         </el-form-item>
         <el-form-item label="历史数据API">
-          <el-input v-model="apiConfig.api_url_history" placeholder="https://api-2.df1888.com/api/Lottery/GetLotteryList" size="small" />
+          <el-input v-model="apiConfig.api_url_history" placeholder="https://history.macaumarksix.com/history/macaujc2/y/{year}" size="small" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" size="small" @click="saveApiConfig" :loading="apiSaving">保存配置</el-button>

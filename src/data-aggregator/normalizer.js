@@ -37,7 +37,7 @@ export function normalizeRecord(record) {
 
   return {
     period_no: record.expect || record.period_no || record.issue || '',
-    draw_date: (record.opentime || record.date || record.draw_date || '').slice(0, 10),
+    draw_date: (record.openTime || record.opentime || record.date || record.draw_date || '').slice(0, 10),
     n1: parts[0], n2: parts[1], n3: parts[2],
     n4: parts[3], n5: parts[4], n6: parts[5],
     special: parts[6]
