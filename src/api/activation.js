@@ -9,26 +9,34 @@ function generateCode() {
     String(Math.floor(Math.random() * 100000)).padStart(5, '0')
 }
 
-// 列表（分页）
+// 列表（分页，支持状态筛选）
 activation.get('/', async (c) => {
   const page = parseInt(c.req.query('page') || '1')
   const pageSize = parseInt(c.req.query('pageSize') || '20')
   const offset = (page - 1) * pageSize
   const keyword = c.req.query('keyword') || ''
+  const statusFilter = c.req.query('status') || ''
 
-  let countSql = 'SELECT COUNT(*) as total FROM activation_codes'
-  let listSql = 'SELECT * FROM activation_codes'
+  let baseSql = 'FROM activation_codes'
+  const wheres = []
   const binds = []
 
   if (keyword) {
-    const where = ' WHERE code LIKE ? OR device_name LIKE ? OR device_id LIKE ?'
-    countSql += where
-    listSql += where
+    wheres.push('(code LIKE ? OR device_name LIKE ? OR device_id LIKE ?)')
     const like = `%${keyword}%`
     binds.push(like, like, like)
   }
+  if (statusFilter) {
+    wheres.push('status = ?')
+    binds.push(statusFilter)
+  }
 
-  listSql += ' ORDER BY id DESC LIMIT ? OFFSET ?'
+  if (wheres.length > 0) {
+    baseSql += ' WHERE ' + wheres.join(' AND ')
+  }
+
+  const countSql = 'SELECT COUNT(*) as total ' + baseSql
+  const listSql = 'SELECT * ' + baseSql + ' ORDER BY id DESC LIMIT ? OFFSET ?'
 
   const total = await c.env.DB.prepare(countSql).bind(...binds).first()
   const list = await c.env.DB.prepare(listSql).bind(...binds, pageSize, offset).all()

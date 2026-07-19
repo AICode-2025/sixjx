@@ -14,6 +14,13 @@
         </div>
       </template>
 
+      <el-tabs v-model="statusFilter" @tab-change="page=1; fetchData()" style="margin-bottom:12px">
+        <el-tab-pane label="全部" name="" />
+        <el-tab-pane label="未激活" name="unactivated" />
+        <el-tab-pane label="已激活" name="activated" />
+        <el-tab-pane label="已禁用" name="disabled" />
+      </el-tabs>
+
       <div class="search-bar">
         <el-input v-model="keyword" placeholder="搜索激活码/设备" style="max-width:300px;width:100%" clearable @clear="fetchData" />
         <el-button @click="fetchData">搜索</el-button>
@@ -70,6 +77,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const keyword = ref('')
+const statusFilter = ref('')
 
 const creating = ref(false)
 const batchCount = ref(10)
@@ -106,6 +114,7 @@ async function fetchData() {
   try {
     const params = { page: page.value, pageSize: pageSize.value }
     if (keyword.value) params.keyword = keyword.value
+    if (statusFilter.value) params.status = statusFilter.value
     const data = await api.get('/api/activation', params)
     list.value = data.list
     total.value = data.total
