@@ -41,7 +41,9 @@
 
       <!-- 内容区 -->
       <main class="main" :class="{ 'has-bottom-tabs': isMobile }">
-        <router-view />
+        <div class="main-content">
+          <router-view />
+        </div>
       </main>
 
       <!-- 移动端底部导航 -->
@@ -72,6 +74,7 @@ const isCollapse = ref(false)
 const mobileOpen = ref(false)
 const username = ref('')
 const isMobile = ref(false)
+const isSmallPc = ref(false)
 const currentRoute = ref('/dashboard')
 
 const bottomTabs = [
@@ -88,8 +91,10 @@ const pageTitle = computed(() => {
   return map[currentRoute.value] || '数据分析系统'
 })
 
-function checkMobile() {
-  isMobile.value = window.innerWidth <= 768
+function checkScreen() {
+  const w = window.innerWidth
+  isMobile.value = w <= 768
+  isSmallPc.value = w > 768 && w < 1200
 }
 
 function handleCommand(cmd) {
@@ -101,14 +106,14 @@ function handleCommand(cmd) {
 }
 
 onMounted(() => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
+  checkScreen()
+  window.addEventListener('resize', checkScreen)
   const user = JSON.parse(sessionStorage.getItem('admin_user') || '{}')
   username.value = user.username || '管理员'
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('resize', checkScreen)
 })
 
 function toggleSidebar() {
@@ -224,8 +229,21 @@ watch(() => route.path, (path) => {
   overflow-y: auto;
   flex: 1;
 }
+.main-content {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+@media (min-width: 1921px) {
+  .main { padding: 20px 40px; }
+}
+@media (max-width: 1200px) and (min-width: 769px) {
+  .main { padding: 16px; }
+}
 @media (max-width: 768px) {
   .main { padding: 12px; }
+  .main-content {
+    max-width: none;
+  }
   .main.has-bottom-tabs { padding-bottom: 72px; }
 }
 

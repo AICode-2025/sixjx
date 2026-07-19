@@ -2,48 +2,50 @@
   <el-card>
     <template #header><span>系统设置</span></template>
 
-    <el-form label-width="120px" style="max-width:500px">
-      <el-form-item label="当前用户">
-        <el-input :model-value="username" disabled />
-      </el-form-item>
-      <el-form-item label="角色">
-        <el-input :model-value="role" disabled />
-      </el-form-item>
-    </el-form>
+    <div class="settings-body">
+      <el-form label-width="120px" style="max-width:500px">
+        <el-form-item label="当前用户">
+          <el-input :model-value="username" disabled />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-input :model-value="role" disabled />
+        </el-form-item>
+      </el-form>
 
-    <el-divider />
+      <el-divider />
 
-    <h3 style="margin-bottom:16px">数据源配置</h3>
-    <el-form :model="apiConfig" label-width="140px" style="max-width:700px">
-      <el-form-item label="澳门数据API">
-        <el-input v-model="apiConfig.api_url_newmacau" placeholder="https://api3.marksix6.net/lottery_api.php?type=newMacau" size="small" />
-      </el-form-item>
-      <el-form-item label="香港数据API">
-        <el-input v-model="apiConfig.api_url_hk" placeholder="https://api3.marksix6.net/lottery_api.php?type=hk" size="small" />
-      </el-form-item>
-      <el-form-item label="历史数据API">
-        <el-input v-model="apiConfig.api_url_history" placeholder="https://api-2.df1888.com/api/Lottery/GetLotteryList" size="small" />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" size="small" @click="saveApiConfig" :loading="apiSaving">保存配置</el-button>
-        <el-button size="small" @click="loadApiConfig">重置</el-button>
-      </el-form-item>
-    </el-form>
+      <h3 style="margin-bottom:16px">数据源配置</h3>
+      <el-form :model="apiConfig" label-width="140px" style="max-width:700px">
+        <el-form-item label="澳门数据API">
+          <el-input v-model="apiConfig.api_url_newmacau" placeholder="https://api3.marksix6.net/lottery_api.php?type=newMacau" size="small" />
+        </el-form-item>
+        <el-form-item label="香港数据API">
+          <el-input v-model="apiConfig.api_url_hk" placeholder="https://api3.marksix6.net/lottery_api.php?type=hk" size="small" />
+        </el-form-item>
+        <el-form-item label="历史数据API">
+          <el-input v-model="apiConfig.api_url_history" placeholder="https://api-2.df1888.com/api/Lottery/GetLotteryList" size="small" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" size="small" @click="saveApiConfig" :loading="apiSaving">保存配置</el-button>
+          <el-button size="small" @click="loadApiConfig">重置</el-button>
+        </el-form-item>
+      </el-form>
 
-    <el-divider />
+      <el-divider />
 
-    <h3 style="margin-bottom:16px">修改密码</h3>
-    <el-form :model="pwdForm" label-width="120px" style="max-width:500px" ref="pwdFormRef">
-      <el-form-item label="旧密码" prop="oldPassword" :rules="[{ required: true, message: '请输入旧密码' }]">
-        <el-input v-model="pwdForm.oldPassword" type="password" show-password />
-      </el-form-item>
-      <el-form-item label="新密码" prop="newPassword" :rules="[{ required: true, message: '请输入新密码' }, { min: 4, message: '至少4位' }]">
-        <el-input v-model="pwdForm.newPassword" type="password" show-password />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" @click="changePassword" :loading="pwdLoading">修改密码</el-button>
-      </el-form-item>
-    </el-form>
+      <h3 style="margin-bottom:16px">修改密码</h3>
+      <el-form :model="pwdForm" label-width="120px" style="max-width:500px" ref="pwdFormRef">
+        <el-form-item label="旧密码" prop="oldPassword" :rules="[{ required: true, message: '请输入旧密码' }]">
+          <el-input v-model="pwdForm.oldPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword" :rules="[{ required: true, message: '请输入新密码' }, { min: 4, message: '至少4位' }]">
+          <el-input v-model="pwdForm.newPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="changePassword" :loading="pwdLoading">修改密码</el-button>
+        </el-form-item>
+      </el-form>
+    </div>
   </el-card>
 </template>
 
@@ -115,3 +117,15 @@ async function changePassword() {
   }
 }
 </script>
+
+<style scoped>
+.settings-body {
+  max-width: 800px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  .settings-body {
+    max-width: none;
+  }
+}
+</style>

@@ -7,59 +7,63 @@
 
     <el-tabs v-model="activeTab" @tab-change="fetchData">
       <el-tab-pane label="香港" name="hk">
-        <el-table :data="hkList" v-loading="loading" stripe border size="small" style="width:100%">
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="period_no" label="期号" width="110" />
-          <el-table-column prop="draw_date" label="日期" width="110" />
-          <el-table-column label="平码" min-width="280">
-            <template #default="{ row }">
-              <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
-                    class="ball flat-ball">{{ n }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="特码" width="80" align="center">
-            <template #default="{ row }">
-              <span class="ball special-ball">{{ row.special }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="{ row }">
-              <el-popconfirm title="确认删除？" @confirm="delRow('hk', row.id)">
-                <template #reference>
-                  <el-button type="danger" link size="small">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrap">
+          <el-table :data="hkList" v-loading="loading" stripe border size="small" style="width:100%">
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="period_no" label="期号" width="110" />
+            <el-table-column prop="draw_date" label="日期" width="110" />
+            <el-table-column label="平码" min-width="280">
+              <template #default="{ row }">
+                <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
+                      class="ball flat-ball">{{ n }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="特码" width="80" align="center">
+              <template #default="{ row }">
+                <span class="ball special-ball">{{ row.special }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="{ row }">
+                <el-popconfirm title="确认删除？" @confirm="delRow('hk', row.id)">
+                  <template #reference>
+                    <el-button type="danger" link size="small">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </el-tab-pane>
 
       <el-tab-pane label="澳门" name="mo">
-        <el-table :data="moList" v-loading="loading" stripe border size="small" style="width:100%">
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="period_no" label="期号" width="110" />
-          <el-table-column prop="draw_date" label="日期" width="110" />
-          <el-table-column label="平码" min-width="280">
-            <template #default="{ row }">
-              <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
-                    class="ball flat-ball">{{ n }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="特码" width="80" align="center">
-            <template #default="{ row }">
-              <span class="ball special-ball">{{ row.special }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="{ row }">
-              <el-popconfirm title="确认删除？" @confirm="delRow('mo', row.id)">
-                <template #reference>
-                  <el-button type="danger" link size="small">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrap">
+          <el-table :data="moList" v-loading="loading" stripe border size="small" style="width:100%">
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="period_no" label="期号" width="110" />
+            <el-table-column prop="draw_date" label="日期" width="110" />
+            <el-table-column label="平码" min-width="280">
+              <template #default="{ row }">
+                <span v-for="(n, i) in [row.n1,row.n2,row.n3,row.n4,row.n5,row.n6]" :key="i"
+                      class="ball flat-ball">{{ n }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="特码" width="80" align="center">
+              <template #default="{ row }">
+                <span class="ball special-ball">{{ row.special }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="{ row }">
+                <el-popconfirm title="确认删除？" @confirm="delRow('mo', row.id)">
+                  <template #reference>
+                    <el-button type="danger" link size="small">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -138,6 +142,9 @@ onMounted(fetchData)
 <style scoped>
 .results-page {
   padding: 20px;
+}
+.table-wrap {
+  overflow-x: auto;
 }
 .page-header {
   display: flex;

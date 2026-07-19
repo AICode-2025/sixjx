@@ -8,7 +8,8 @@
       </div>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe border size="small" style="width:100%">
+    <div class="table-wrap">
+      <el-table :data="list" v-loading="loading" stripe border size="small" style="width:100%">
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="period_no" label="期号" width="120" />
       <el-table-column prop="draw_date" label="开奖日期" width="140" />
@@ -24,6 +25,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="showAdd" title="新增期号" width="400px" @close="resetForm">
@@ -219,6 +221,9 @@ onMounted(fetchList)
 <style scoped>
 .hk-periods-page {
   padding: 20px;
+}
+.table-wrap {
+  overflow-x: auto;
 }
 .page-header {
   display: flex;

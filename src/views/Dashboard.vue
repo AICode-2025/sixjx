@@ -2,14 +2,16 @@
   <div>
     <el-card>
       <template #header><span>近期同步报表</span></template>
-      <el-table :data="recentReports" stripe v-loading="loading" style="width:100%">
-        <el-table-column prop="period_no" label="期号" width="120" />
-        <el-table-column prop="user_count" label="同步用户数" width="100" />
-        <el-table-column prop="total_bet" label="总报单额" />
-        <el-table-column prop="total_payout" label="总派发" />
-        <el-table-column prop="total_profit" label="总盈亏" />
-        <el-table-column prop="last_synced" label="最后同步" />
-      </el-table>
+      <div class="table-wrap">
+        <el-table :data="recentReports" stripe v-loading="loading" style="width:100%">
+          <el-table-column prop="period_no" label="期号" width="100" />
+          <el-table-column prop="user_count" label="同步用户数" min-width="90" />
+          <el-table-column prop="total_bet" label="总报单额" min-width="100" show-overflow-tooltip />
+          <el-table-column prop="total_payout" label="总派发" min-width="100" show-overflow-tooltip />
+          <el-table-column prop="total_profit" label="总盈亏" min-width="100" show-overflow-tooltip />
+          <el-table-column prop="last_synced" label="最后同步" min-width="120" show-overflow-tooltip />
+        </el-table>
+      </div>
     </el-card>
   </div>
 </template>
@@ -33,3 +35,9 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.table-wrap {
+  overflow-x: auto;
+}
+</style>
