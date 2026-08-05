@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { auth } from './api/auth.js'
 import { activation } from './api/activation.js'
 import { syncReports } from './api/sync-reports.js'
-import { periods } from './api/periods.js'
+import { periods, syncHKPeriods } from './api/periods.js'
 import { aggregator } from './data-aggregator/index.js'
 import { authMiddleware } from './middleware/auth.js'
 import { fetchExternalAPI, getAPIUrl } from './data-aggregator/fetcher.js'
@@ -399,4 +399,6 @@ export async function scheduled(event, env, ctx) {
     syncLatestToDB(c, 'mo_results', urls.mo),
     syncLatestToDB(c, 'hk_results', urls.hk)
   ])
+  // 结果入库后自动同步香港期号
+  await syncHKPeriods(c)
 }

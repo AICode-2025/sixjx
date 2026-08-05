@@ -3,28 +3,38 @@
     <div class="page-header">
       <h2>香港期号管理</h2>
       <div class="header-actions">
+        <el-button type="success" @click="generateMonth" :loading="generating">生成未来一个月</el-button>
         <el-button type="warning" @click="importFromLocal">导入默认数据</el-button>
         <el-button type="primary" @click="showAdd = true">新增期号</el-button>
       </div>
     </div>
 
     <div class="table-wrap">
-      <el-table :data="list" v-loading="loading" stripe border size="small" style="width:100%">
-      <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="period_no" label="期号" width="120" />
-      <el-table-column prop="draw_date" label="开奖日期" width="140" />
-      <el-table-column prop="created_at" label="创建时间" width="170" />
-      <el-table-column label="操作" min-width="160">
-        <template #default="{ row }">
-          <el-button type="primary" link size="small" @click="editRow(row)">编辑</el-button>
-          <el-popconfirm title="确认删除此期号？" @confirm="delRow(row.id)">
-            <template #reference>
-              <el-button type="danger" link size="small">删除</el-button>
+      <div v-for="g in groups" :key="g.year" class="year-group">
+        <div class="year-title">{{ g.year }} 年（{{ g.items.length }} 期）</div>
+        <el-table :data="g.items" v-loading="loading" stripe border size="small" style="width:100%">
+          <el-table-column prop="id" label="ID" width="60" />
+          <el-table-column prop="period_no" label="期号" width="120" />
+          <el-table-column prop="draw_date" label="开奖日期" width="140" />
+          <el-table-column prop="created_at" label="创建时间" width="170" />
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="isFuture(row.draw_date)" type="warning" size="small">待确认</el-tag>
+              <el-tag v-else type="success" size="small">已到期</el-tag>
             </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
+          </el-table-column>
+          <el-table-column label="操作" min-width="160">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="editRow(row)">编辑</el-button>
+              <el-popconfirm title="确认删除此期号？" @confirm="delRow(row.id)">
+                <template #reference>
+                  <el-button type="danger" link size="small">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
@@ -67,8 +77,9 @@ import { ElMessage } from 'element-plus'
 const API_BASE = ''
 const token = () => sessionStorage.getItem('admin_token')
 
-const list = ref([])
+const groups = ref([])
 const loading = ref(false)
+const generating = ref(false)
 const showAdd = ref(false)
 const showEdit = ref(false)
 const submitting = ref(false)
@@ -82,8 +93,21 @@ async function fetchList() {
       headers: { Authorization: `Bearer ${token()}` }
     })
     const data = await res.json()
-    if (data.code === 0) list.value = data.data || []
-    else ElMessage.error(data.message || '加载失败')
+    if (data.code === 0) {
+      // 按年份归类：最新年份在最上，组内期号最新在前
+      const rows = data.data || []
+      const map = {}
+      for (const r of rows) {
+        const y = String(r.period_no).slice(0, 4)
+        ;(map[y] = map[y] || []).push(r)
+      }
+      groups.value = Object.keys(map)
+        .sort((a, b) => Number(b) - Number(a))
+        .map(y => ({
+          year: y,
+          items: map[y].sort((a, b) => String(b.period_no).localeCompare(String(a.period_no)))
+        }))
+    } else ElMessage.error(data.message || '加载失败')
   } catch (_) {
     ElMessage.error('网络错误')
   } finally {
@@ -172,6 +196,35 @@ async function delRow(id) {
   }
 }
 
+// 判断日期是否在未来（用于展示"待确认"状态）
+function isFuture(dateStr) {
+  if (!dateStr) return false
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.getTime() > Date.now()
+}
+
+// 生成未来一个月期号（后端从开奖日历采集，期号以采集源锚点顺延，不做星期推算）
+async function generateMonth() {
+  generating.value = true
+  try {
+    const res = await fetch(`${API_BASE}/api/periods/hk/generate-month`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }
+    })
+    const data = await res.json()
+    if (data.code === 0) {
+      ElMessage.success(`${data.message || '生成完成'}，待官方确认后开奖`)
+      fetchList()
+    } else {
+      ElMessage.error(data.message || '生成失败')
+    }
+  } catch (_) {
+    ElMessage.error('网络错误')
+  } finally {
+    generating.value = false
+  }
+}
+
 // 从本地硬编码导入全部默认期号
 async function importFromLocal() {
   const defaultPeriods = [
@@ -224,6 +277,18 @@ onMounted(fetchList)
 }
 .table-wrap {
   overflow-x: auto;
+}
+.year-group {
+  margin-bottom: 20px;
+}
+.year-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  padding: 8px 4px;
+  border-left: 4px solid #f56c6c;
+  padding-left: 10px;
+  margin-bottom: 8px;
 }
 .page-header {
   display: flex;
