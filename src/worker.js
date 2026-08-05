@@ -153,6 +153,25 @@ app.get('/api/client/config', async (c) => {
   })
 })
 
+// 检查更新（用户端APP手动调用，公开无需认证）
+app.get('/api/client/check-update', async (c) => {
+  const configs = await c.env.DB.prepare(
+    "SELECT key, value FROM api_config WHERE key IN ('app_latest_version','app_download_url','app_update_note')"
+  ).all()
+  const result = {}
+  for (const row of (configs.results || [])) {
+    result[row.key] = row.value
+  }
+  return c.json({
+    code: 0,
+    data: {
+      latest_version: result.app_latest_version || '',
+      download_url: result.app_download_url || '',
+      update_note: result.app_update_note || ''
+    }
+  })
+})
+
 // 系统配置读取
 app.get('/api/system/api-config', async (c) => {
   const configs = await c.env.DB.prepare('SELECT * FROM api_config').all()

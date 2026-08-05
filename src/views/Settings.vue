@@ -33,6 +33,25 @@
 
       <el-divider />
 
+      <h3 style="margin-bottom:16px">APP 版本配置</h3>
+      <el-form :model="appConfig" label-width="140px" style="max-width:700px">
+        <el-form-item label="最新版本号">
+          <el-input v-model="appConfig.app_latest_version" placeholder="如 1.0.1" size="small" />
+        </el-form-item>
+        <el-form-item label="APK 下载链接">
+          <el-input v-model="appConfig.app_download_url" placeholder="https://xxx/xxx.apk" size="small" />
+        </el-form-item>
+        <el-form-item label="更新说明">
+          <el-input v-model="appConfig.app_update_note" type="textarea" :rows="2" placeholder="本次更新内容" size="small" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" size="small" @click="saveAppConfig" :loading="appSaving">保存配置</el-button>
+          <el-button size="small" @click="loadAppConfig">重置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-divider />
+
       <h3 style="margin-bottom:16px">修改密码</h3>
       <el-form :model="pwdForm" label-width="120px" style="max-width:500px" ref="pwdFormRef">
         <el-form-item label="旧密码" prop="oldPassword" :rules="[{ required: true, message: '请输入旧密码' }]">
@@ -67,6 +86,13 @@ const apiConfig = reactive({
 })
 const apiSaving = ref(false)
 
+const appConfig = reactive({
+  app_latest_version: '',
+  app_download_url: '',
+  app_update_note: ''
+})
+const appSaving = ref(false)
+
 onMounted(async () => {
   const user = JSON.parse(sessionStorage.getItem('admin_user') || '{}')
   username.value = user.username || ''
@@ -80,6 +106,9 @@ async function loadApiConfig() {
     if (data.api_url_newmacau) apiConfig.api_url_newmacau = data.api_url_newmacau
     if (data.api_url_hk) apiConfig.api_url_hk = data.api_url_hk
     if (data.api_url_history) apiConfig.api_url_history = data.api_url_history
+    if (data.app_latest_version) appConfig.app_latest_version = data.app_latest_version
+    if (data.app_download_url) appConfig.app_download_url = data.app_download_url
+    if (data.app_update_note) appConfig.app_update_note = data.app_update_note
   } catch (_) {
     // 首次加载无配置时忽略
   }
@@ -98,6 +127,33 @@ async function saveApiConfig() {
     ElMessage.error(err.message || '保存失败')
   } finally {
     apiSaving.value = false
+  }
+}
+
+async function loadAppConfig() {
+  try {
+    const data = await api.get('/api/system/api-config')
+    if (data.app_latest_version) appConfig.app_latest_version = data.app_latest_version
+    if (data.app_download_url) appConfig.app_download_url = data.app_download_url
+    if (data.app_update_note) appConfig.app_update_note = data.app_update_note
+  } catch (_) {
+    // 忽略
+  }
+}
+
+async function saveAppConfig() {
+  appSaving.value = true
+  try {
+    const payload = {}
+    if (appConfig.app_latest_version) payload.app_latest_version = appConfig.app_latest_version
+    if (appConfig.app_download_url) payload.app_download_url = appConfig.app_download_url
+    if (appConfig.app_update_note) payload.app_update_note = appConfig.app_update_note
+    await api.post('/api/system/api-config', payload)
+    ElMessage.success('APP 版本配置已保存')
+  } catch (err) {
+    ElMessage.error(err.message || '保存失败')
+  } finally {
+    appSaving.value = false
   }
 }
 
