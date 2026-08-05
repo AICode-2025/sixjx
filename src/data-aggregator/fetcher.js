@@ -3,8 +3,8 @@
  * 支持超时、重试，API URL 从 D1 api_config 表动态读取
  */
 
-const DEFAULT_TIMEOUT = 10000
-const MAX_RETRIES = 2
+const DEFAULT_TIMEOUT = 4000
+const MAX_RETRIES = 1
 
 export async function fetchExternalAPI(url, { timeout = DEFAULT_TIMEOUT, retries = MAX_RETRIES } = {}) {
   let lastErr
@@ -22,7 +22,7 @@ export async function fetchExternalAPI(url, { timeout = DEFAULT_TIMEOUT, retries
     } catch (err) {
       lastErr = err
       if (i < retries) {
-        await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+        await new Promise(r => setTimeout(r, 500 * (i + 1)))
       }
     }
   }

@@ -65,12 +65,23 @@ aggregator.get('/init', async (c) => {
     if (!verify.valid) return c.json({ code: 1, message: verify.message })
   }
 
-  // 并行拉取香港和澳门数据
-  const [hk, mo] = await Promise.all([refreshHK(c), refreshMacau(c)])
+  const year = String(new Date().getFullYear())
+  // 历史记录已在 D1，缓存新鲜（30 分钟内）时直接返回，避免每次请求都拉外部源导致响应缓慢
+  const [hkFresh, moFresh] = await Promise.all([isCacheFresh(c, 'hk_results'), isCacheFresh(c, 'mo_results')])
+  let hk = { source: 'cache' }
+  let mo = { source: 'cache' }
+  if (!hkFresh || !moFresh) {
+    const [r1, r2] = await Promise.all([
+      hkFresh ? null : refreshHK(c),
+      moFresh ? null : refreshMacau(c)
+    ])
+    hk = r1 || hk
+    mo = r2 || mo
+  }
 
-  // 返回最新缓存
-  const hkData = await getResults(c, 'hk_results', String(new Date().getFullYear()))
-  const moData = await getResults(c, 'mo_results', String(new Date().getFullYear()))
+  // 返回 D1 最新数据
+  const hkData = await getResults(c, 'hk_results', year)
+  const moData = await getResults(c, 'mo_results', year)
 
   return c.json({
     code: 0,

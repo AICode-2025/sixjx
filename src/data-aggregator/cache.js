@@ -22,24 +22,28 @@ export async function isCacheFresh(c, table) {
 }
 
 /**
- * 批量写入开奖结果
+ * 批量写入开奖结果（D1 batch 分批，避免逐条串行写入导致接口缓慢）
  */
 export async function saveResults(c, table, list) {
-  let success = 0
-  let fail = 0
   const stmt = c.env.DB.prepare(
     `INSERT OR IGNORE INTO ${table} (period_no, draw_date, n1, n2, n3, n4, n5, n6, special)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-  for (const item of list) {
+  let success = 0
+  const BATCH_SIZE = 100
+  for (let i = 0; i < list.length; i += BATCH_SIZE) {
+    const chunk = list.slice(i, i + BATCH_SIZE).map(item =>
+      stmt.bind(item.period_no, item.draw_date, item.n1, item.n2, item.n3, item.n4, item.n5, item.n6, item.special)
+    )
+    if (chunk.length === 0) continue
     try {
-      await stmt.bind(item.period_no, item.draw_date, item.n1, item.n2, item.n3, item.n4, item.n5, item.n6, item.special).run()
-      success++
+      const results = await c.env.DB.batch(chunk)
+      success += results.filter(r => r.success).length
     } catch (_) {
-      fail++
+      // 单批失败跳过，不阻塞返回
     }
   }
-  return { success, fail }
+  return { success, fail: list.length - success }
 }
 
 /**
