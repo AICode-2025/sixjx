@@ -9,26 +9,31 @@ function generateCode() {
     String(Math.floor(Math.random() * 100000)).padStart(5, '0')
 }
 
-// 列表（分页，支持状态筛选）
+// 列表（分页，支持状态/发放人筛选）
 activation.get('/', async (c) => {
   const page = parseInt(c.req.query('page') || '1')
   const pageSize = parseInt(c.req.query('pageSize') || '20')
   const offset = (page - 1) * pageSize
   const keyword = c.req.query('keyword') || ''
   const statusFilter = c.req.query('status') || ''
+  const issuerFilter = c.req.query('issuer') || ''
 
   let baseSql = 'FROM activation_codes'
   const wheres = []
   const binds = []
 
   if (keyword) {
-    wheres.push('(code LIKE ? OR device_name LIKE ? OR device_id LIKE ?)')
+    wheres.push('(code LIKE ? OR device_name LIKE ? OR device_id LIKE ? OR issuer LIKE ?)')
     const like = `%${keyword}%`
-    binds.push(like, like, like)
+    binds.push(like, like, like, like)
   }
   if (statusFilter) {
     wheres.push('status = ?')
     binds.push(statusFilter)
+  }
+  if (issuerFilter) {
+    wheres.push('issuer = ?')
+    binds.push(issuerFilter)
   }
 
   if (wheres.length > 0) {
@@ -52,19 +57,32 @@ activation.get('/', async (c) => {
   })
 })
 
+// 发放人列表（去重，供管理端筛选/生成时选择）
+activation.get('/issuers', async (c) => {
+  const res = await c.env.DB.prepare(
+    "SELECT DISTINCT issuer FROM activation_codes WHERE issuer IS NOT NULL AND issuer != '' ORDER BY issuer"
+  ).all()
+  return c.json({ code: 0, data: (res.results || []).map(r => r.issuer) })
+})
+
 // 创建单个
 activation.post('/', async (c) => {
   const code = generateCode()
+  let issuer = ''
+  try {
+    const body = await c.req.json()
+    issuer = (body && body.issuer) || ''
+  } catch (_) {}
   await c.env.DB.prepare(
-    'INSERT INTO activation_codes (code, status) VALUES (?, ?)'
-  ).bind(code, 'unactivated').run()
+    'INSERT INTO activation_codes (code, status, issuer) VALUES (?, ?, ?)'
+  ).bind(code, 'unactivated', issuer).run()
 
   return c.json({ code: 0, data: { code }, message: '创建成功' })
 })
 
 // 批量创建
 activation.post('/batch', async (c) => {
-  const { count } = await c.req.json()
+  const { count, issuer = '' } = await c.req.json()
   const num = Math.min(Math.max(parseInt(count) || 10, 1), 100)
   const codes = []
 
@@ -73,9 +91,9 @@ activation.post('/batch', async (c) => {
     codes.push(code)
   }
 
-  const stmt = c.env.DB.prepare('INSERT INTO activation_codes (code, status) VALUES (?, ?)')
+  const stmt = c.env.DB.prepare('INSERT INTO activation_codes (code, status, issuer) VALUES (?, ?, ?)')
   for (const code of codes) {
-    await stmt.bind(code, 'unactivated').run()
+    await stmt.bind(code, 'unactivated', issuer || '').run()
   }
 
   return c.json({ code: 0, data: { codes, count: codes.length }, message: `成功生成 ${codes.length} 个激活码` })

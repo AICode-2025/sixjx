@@ -18,7 +18,10 @@
       </el-tabs>
 
       <div class="search-bar">
-        <el-input v-model="keyword" placeholder="搜索激活码/设备" style="max-width:300px;width:100%" clearable @clear="fetchData" />
+        <el-input v-model="keyword" placeholder="搜索激活码/设备/发放人" style="max-width:300px;width:100%" clearable @clear="fetchData" />
+        <el-select v-model="issuerFilter" placeholder="按发放人筛选" clearable style="max-width:200px;width:100%" @change="page=1; fetchData()">
+          <el-option v-for="issuer in issuers" :key="issuer" :label="issuer" :value="issuer" />
+        </el-select>
         <el-button @click="fetchData">搜索</el-button>
       </div>
 
@@ -32,6 +35,11 @@
         <el-table :data="list" stripe v-loading="loading" style="width:100%" @selection-change="onSelectionChange" @row-dblclick="copyCode">
           <el-table-column type="selection" width="50" />
           <el-table-column prop="code" label="激活码" min-width="140" />
+          <el-table-column prop="issuer" label="发放人" min-width="100">
+            <template #default="{ row }">
+              <span>{{ row.issuer || '未指定' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
@@ -60,8 +68,21 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="showGenerate" title="生成激活码" width="360px" @close="genCount=1">
+    <el-dialog v-model="showGenerate" title="生成激活码" width="360px" @close="genCount=1; genIssuer=''">
       <el-form label-width="80px">
+        <el-form-item label="发放人">
+          <el-select
+            v-model="genIssuer"
+            placeholder="选择或输入发放人"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            style="width:100%"
+          >
+            <el-option v-for="issuer in issuers" :key="issuer" :label="issuer" :value="issuer" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="生成数量">
           <el-input-number v-model="genCount" :min="1" :max="100" style="width:100%" />
         </el-form-item>
@@ -86,9 +107,12 @@ const pageSize = ref(20)
 const total = ref(0)
 const keyword = ref('')
 const statusFilter = ref('')
+const issuerFilter = ref('')
+const issuers = ref([])
 
 const showGenerate = ref(false)
 const genCount = ref(1)
+const genIssuer = ref('')
 const genLoading = ref(false)
 const selectedIds = ref([])
 
@@ -123,6 +147,7 @@ async function fetchData() {
     const params = { page: page.value, pageSize: pageSize.value }
     if (keyword.value) params.keyword = keyword.value
     if (statusFilter.value) params.status = statusFilter.value
+    if (issuerFilter.value) params.issuer = issuerFilter.value
     const data = await api.get('/api/activation', params)
     list.value = data.list
     total.value = data.total
@@ -131,6 +156,12 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadIssuers() {
+  try {
+    issuers.value = await api.get('/api/activation/issuers')
+  } catch (_) {}
 }
 
 async function handleGenerate() {
@@ -186,7 +217,10 @@ function copyCode(row) {
   })
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  loadIssuers()
+})
 </script>
 
 <style scoped>

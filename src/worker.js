@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS activation_codes (
   code TEXT UNIQUE NOT NULL,
   device_id TEXT,
   device_name TEXT,
+  issuer TEXT DEFAULT '',
   status TEXT DEFAULT 'unactivated',
   activated_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
