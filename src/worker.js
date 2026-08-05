@@ -6,6 +6,11 @@ import { syncReports } from './api/sync-reports.js'
 import { periods } from './api/periods.js'
 import { aggregator } from './data-aggregator/index.js'
 import { authMiddleware } from './middleware/auth.js'
+import { fetchExternalAPI, getAPIUrl } from './data-aggregator/fetcher.js'
+import {
+  extractRecords as extractRecordsAgg,
+  normalizeRecord as normalizeRecordAgg
+} from './data-aggregator/normalizer.js'
 
 const app = new Hono()
 
@@ -127,9 +132,6 @@ app.get('/api/system/health', async (c) => {
 app.post('/api/system/test', async (c) => {
   return c.json({ code: 0, method: c.req.method, path: c.req.path })
 })
-
-// 登录/退出
-app.route('/api/auth', auth)
 
 // 客户端 API 配置获取（公开，无需认证）
 app.get('/api/client/config', async (c) => {
@@ -255,17 +257,26 @@ app.get('/api/lottery/fetch-history', async (c) => {
     }
   }
 
-  // 澳门：从外部 API 拉取
-  const url = `https://history.macaumarksix.com/history/macaujc2/y/${year}`
-
+  // 澳门：优先从本地 mo_results 表读取，表为空时外部拉取兜底
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-    const data = await res.json()
-    const records = extractRecords(data)
-    const results = []
-    for (const record of records) {
-      const norm = normalizeRecord(record, lotteryId)
-      if (norm) results.push(norm)
+    const moRows = await c.env.DB.prepare(
+      'SELECT * FROM mo_results WHERE period_no LIKE ? ORDER BY period_no DESC'
+    ).bind(year + '%').all()
+    let results = (moRows.results || []).map(r => ({
+      period_no: r.period_no,
+      openCode: [r.n1, r.n2, r.n3, r.n4, r.n5, r.n6, r.special].join(','),
+      opentime: r.draw_date
+    }))
+    if (results.length === 0) {
+      const url = `https://history.macaumarksix.com/history/macaujc2/y/${year}`
+      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      const data = await res.json()
+      const records = extractRecords(data)
+      results = []
+      for (const record of records) {
+        const norm = normalizeRecord(record, lotteryId)
+        if (norm) results.push(norm)
+      }
     }
     return c.json({
       code: 0,
@@ -338,26 +349,54 @@ app.get('/api/lottery/proxy', async (c) => {
 
 export default app
 
-// Cron Trigger: 每天21:32-21:40每2分钟拉取开奖结果
-export async function scheduled(event, env, ctx) {
-  const configs = await env.DB.prepare(
-    "SELECT key, value FROM api_config WHERE key IN ('api_url_newmacau','api_url_hk')"
-  ).all()
-  const cfg = {}
-  for (const row of (configs.results || [])) {
-    cfg[row.key] = row.value
-  }
-
-  const apis = [
-    cfg.api_url_newmacau || 'https://api3.marksix6.net/lottery_api.php?type=newMacau',
-    cfg.api_url_hk || 'https://api3.marksix6.net/lottery_api.php?type=hk'
-  ]
-  for (const api of apis) {
+/**
+ * 批量写入开奖结果到 D1（INSERT OR IGNORE 按 period_no 去重）
+ */
+async function saveResultsToDB(c, table, list) {
+  let success = 0
+  const stmt = c.env.DB.prepare(
+    `INSERT OR IGNORE INTO ${table} (period_no, draw_date, n1, n2, n3, n4, n5, n6, special)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+  for (const item of list) {
     try {
-      const res = await fetch(api, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-      await res.json()
-    } catch (err) {
-      console.error(`[Cron] Error: ${api}`, err)
-    }
+      await stmt.bind(item.period_no, item.draw_date, item.n1, item.n2, item.n3, item.n4, item.n5, item.n6, item.special).run()
+      success++
+    } catch (_) {}
   }
+  return success
+}
+
+/**
+ * 拉取单个外部源并写入对应结果表
+ * 取归一化后最新 5 条入库，避免全量写入浪费 D1 配额（存量由导入脚本负责）
+ */
+async function syncLatestToDB(c, table, url) {
+  const { success, data, error } = await fetchExternalAPI(url)
+  if (!success) {
+    console.error(`[Cron] ${table} 拉取失败: ${error}`)
+    return
+  }
+  const records = extractRecordsAgg(data)
+  const normalized = records.map(normalizeRecordAgg).filter(Boolean)
+  if (normalized.length === 0) {
+    console.error(`[Cron] ${table} 无可解析数据`)
+    return
+  }
+  normalized.sort((a, b) => String(b.period_no).localeCompare(String(a.period_no)))
+  const latest = normalized.slice(0, 5)
+  const n = await saveResultsToDB(c, table, latest)
+  console.log(`[Cron] ${table}: 解析 ${normalized.length} 条，写入最新 ${n} 条`)
+}
+
+// Cron Trigger: 每天21:32-21:40每2分钟拉取开奖结果并入库
+// 澳门 21:33-21:36 出结果，香港开奖日 21:30 出结果；INSERT OR IGNORE 幂等可重复执行
+export async function scheduled(event, env, ctx) {
+  const c = { env }
+  const urls = await getAPIUrl(c).catch(() => null)
+  if (!urls) return
+  await Promise.all([
+    syncLatestToDB(c, 'mo_results', urls.mo),
+    syncLatestToDB(c, 'hk_results', urls.hk)
+  ])
 }
