@@ -31,8 +31,9 @@ export function extractRecords(data) {
 /**
  * 标准化单条开奖记录 → { period_no, draw_date, n1-n6, special }
  * 支持字段名：openCode/opencode/open_code, expect/period_no/issue, opentime/date/draw_date
+ * @param {boolean} isMO 澳门记录：draw_date 缺失时按期号（年份+年积日）反推日期
  */
-export function normalizeRecord(record) {
+export function normalizeRecord(record, isMO) {
   if (!record || typeof record !== 'object') return null
   const openCode = record.openCode || record.opencode || record.open_code || ''
   if (!openCode) return null
@@ -40,11 +41,29 @@ export function normalizeRecord(record) {
   const parts = String(openCode).split(',').map(s => Number(s.trim())).filter(n => n >= 1 && n <= 49)
   if (parts.length < 7) return null
 
+  let draw_date = (record.openTime || record.opentime || record.date || record.draw_date || '').slice(0, 10)
+  if (!draw_date && isMO) draw_date = dateFromMOPeriod(record.expect || record.period_no || record.issue || '')
+
   return {
     period_no: record.expect || record.period_no || record.issue || '',
-    draw_date: (record.openTime || record.opentime || record.date || record.draw_date || '').slice(0, 10),
+    draw_date,
     n1: parts[0], n2: parts[1], n3: parts[2],
     n4: parts[3], n5: parts[4], n6: parts[5],
     special: parts[6]
   }
+}
+
+/**
+ * 澳门期号 = 年份 + 年积日（如 2026216 = 2026 年第 216 天），反推 YYYY-MM-DD
+ */
+export function dateFromMOPeriod(periodNo) {
+  const m = String(periodNo || '').match(/^(\d{4})(\d{1,3})$/)
+  if (!m) return ''
+  const doy = Number(m[2])
+  if (doy < 1 || doy > 366) return ''
+  const d = new Date(Date.UTC(Number(m[1]), 0, doy))
+  const y = d.getUTCFullYear()
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const da = String(d.getUTCDate()).padStart(2, '0')
+  return y + '-' + mo + '-' + da
 }

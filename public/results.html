@@ -251,7 +251,13 @@
     sel.innerHTML = '<option value="">全部年份</option>' + keys.map(function (y) {
       return '<option value="' + y + '">' + y + '</option>';
     }).join('');
-    sel.value = cur;
+    // 默认选中当前年份，避免一次性展示全部历史
+    if (!cur) {
+      var now = String(new Date().getFullYear());
+      sel.value = keys.indexOf(now) !== -1 ? now : '';
+    } else {
+      sel.value = cur;
+    }
   }
 
   function applyFilter() {

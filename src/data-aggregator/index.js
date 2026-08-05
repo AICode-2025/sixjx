@@ -34,7 +34,7 @@ async function refreshHK(c) {
     return { source: 'error', error }
   }
   const records = extractRecords(data)
-  const normalized = records.map(normalizeRecord).filter(Boolean)
+  const normalized = records.map(r => normalizeRecord(r, false)).filter(Boolean)
   if (normalized.length === 0) return { source: 'empty' }
   await saveResults(c, 'hk_results', normalized)
   return { source: 'api', count: normalized.length }
@@ -49,7 +49,7 @@ async function refreshMacau(c) {
     return { source: 'error', error }
   }
   const records = extractRecords(data)
-  const normalized = records.map(normalizeRecord).filter(Boolean)
+  const normalized = records.map(r => normalizeRecord(r, true)).filter(Boolean)
   if (normalized.length === 0) return { source: 'empty' }
   await saveResults(c, 'mo_results', normalized)
   return { source: 'api', count: normalized.length }

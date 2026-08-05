@@ -9,7 +9,8 @@ import { authMiddleware } from './middleware/auth.js'
 import { fetchExternalAPI, getAPIUrl } from './data-aggregator/fetcher.js'
 import {
   extractRecords as extractRecordsAgg,
-  normalizeRecord as normalizeRecordAgg
+  normalizeRecord as normalizeRecordAgg,
+  dateFromMOPeriod
 } from './data-aggregator/normalizer.js'
 
 const app = new Hono()
@@ -306,7 +307,10 @@ function normalizeRecord(record, lotteryId) {
   // 澳门 marksix 格式: { expect, openCode, opentime }
   if (record.openCode || record.opencode) {
     const oc = record.openCode || record.opencode || ''
-    return { period_no: record.expect || '', openCode: oc, opentime: record.opentime || '' }
+    let opentime = record.opentime || record.date || ''
+    // 澳门数据源常缺日期，按澳门期号（年份+年积日）反推
+    if (!opentime && lotteryId === 1) opentime = dateFromMOPeriod(record.expect || '')
+    return { period_no: record.expect || '', openCode: oc, opentime }
   }
   if (lotteryId !== 2) return null
   // 香港 HKJC 格式: { id, date, no, sno }
@@ -378,7 +382,7 @@ async function syncLatestToDB(c, table, url) {
     return
   }
   const records = extractRecordsAgg(data)
-  const normalized = records.map(normalizeRecordAgg).filter(Boolean)
+  const normalized = records.map(r => normalizeRecordAgg(r, table === 'mo_results')).filter(Boolean)
   if (normalized.length === 0) {
     console.error(`[Cron] ${table} 无可解析数据`)
     return
