@@ -170,14 +170,15 @@ async function handleGenerate() {
   genLoading.value = true
   try {
     if (count === 1) {
-      const data = await api.post('/api/activation')
+      const data = await api.post('/api/activation', { issuer: genIssuer.value })
       ElMessage.success(`已生成：${data.code}`)
     } else {
-      const data = await api.post('/api/activation/batch', { count })
+      const data = await api.post('/api/activation/batch', { count, issuer: genIssuer.value })
       ElMessage.success(`已生成 ${data.codes.length} 个激活码`)
     }
     showGenerate.value = false
     genCount.value = 1
+    genIssuer.value = ''
     fetchData()
   } catch (err) {
     ElMessage.error(err.message)
