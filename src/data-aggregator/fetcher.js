@@ -43,8 +43,10 @@ export async function getAPIUrl(c) {
     cfg[row.key] = row.value
   }
   const year = new Date().getFullYear()
+  // 兼容 `${year}` 与 `{year}` 两种占位符写法（先替换 `${year}`，避免残留 `$`）
+  const fillYear = (url) => String(url).replace(/\$\{year\}/g, year).replace(/\{year\}/g, year)
   return {
-    hk: (cfg.api_url_hk || 'https://1234kj.com/api/opencode/2034?type=all').replace(/\{year\}/g, year),
-    mo: (cfg.api_url_newmacau || 'https://history.macaumarksix.com/history/macaujc2/y/{year}').replace(/\{year\}/g, year)
+    hk: fillYear(cfg.api_url_hk || 'https://1234kj.com/api/opencode/2034?type=all'),
+    mo: fillYear(cfg.api_url_newmacau || 'https://history.macaumarksix.com/history/macaujc2/y/{year}')
   }
 }

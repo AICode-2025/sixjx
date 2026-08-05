@@ -18,6 +18,11 @@ export function extractRecords(data) {
   if ((data.code === 0 || data.code === 200) && Array.isArray(data.data)) return data.data
   // { code: 0, data: { list: [...] } }
   if ((data.code === 0 || data.code === 200) && data.data && Array.isArray(data.data.list)) return data.data.list
+  // { code: 0, data: { "2026077": {...} } } 1234kj 对象格式
+  if ((data.code === 0 || data.code === 200) && data.data && typeof data.data === 'object') {
+    const vals = Object.values(data.data)
+    if (vals.length > 0 && vals.every(v => v && typeof v === 'object')) return vals
+  }
   // 单条格式
   if (data.openCode || data.opencode) return [data]
   return []
