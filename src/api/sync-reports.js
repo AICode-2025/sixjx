@@ -192,7 +192,22 @@ syncReports.get('/detail/:periodNo', async (c) => {
   return c.json({ code: 0, data: rows })
 })
 
-// ─── 用户列表 ───
+// ─── 删除单条用户上报记录（含关联明细） ───
+syncReports.delete('/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ code: 1, message: '参数不合法' })
+  }
+  const existing = await c.env.DB.prepare('SELECT id FROM sync_reports WHERE id = ?').bind(id).first()
+  if (!existing) {
+    return c.json({ code: 1, message: '记录不存在' })
+  }
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM sync_report_items WHERE report_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM sync_reports WHERE id = ?').bind(id)
+  ])
+  return c.json({ code: 0, message: '删除成功' })
+})
 syncReports.get('/users', async (c) => {
   const result = await c.env.DB.prepare(`
     SELECT DISTINCT activation_code FROM sync_reports ORDER BY activation_code

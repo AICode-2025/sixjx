@@ -3,3 +3,4 @@ dist/
 .wrangler/
 *.local.sqlite
 .DS_Store
+.dev.vars
