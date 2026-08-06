@@ -3,7 +3,8 @@
  * 兼容旧版明文密码：verify 时命中明文会标记 needsUpgrade，由调用方落库升级
  */
 
-const ITERATIONS = 120000
+// 迭代次数受 Cloudflare Workers 免费计划 CPU 时间限制（10ms/请求），120000 次会超限导致 500
+const ITERATIONS = 1000
 const KEY_LENGTH = 32 // 256-bit
 const HASH = 'SHA-256'
 const PREFIX = 'pbkdf2$v1$'
@@ -22,7 +23,7 @@ function b64ToBuf(b64) {
   return bytes
 }
 
-async function deriveKey(password, salt) {
+async function deriveKey(password, salt, iterations = ITERATIONS) {
   const enc = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -32,18 +33,18 @@ async function deriveKey(password, salt) {
     ['deriveBits']
   )
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: HASH },
+    { name: 'PBKDF2', salt, iterations, hash: HASH },
     keyMaterial,
     KEY_LENGTH * 8
   )
   return new Uint8Array(bits)
 }
 
-/** 生成密码哈希（随机盐） */
+/** 生成密码哈希（随机盐），格式：pbkdf2$v1$<iter>$<salt>$<key> */
 export async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16))
-  const key = await deriveKey(password, salt)
-  return PREFIX + bufToB64(salt) + '$' + bufToB64(key)
+  const key = await deriveKey(password, salt, ITERATIONS)
+  return PREFIX + ITERATIONS + '$' + bufToB64(salt) + '$' + bufToB64(key)
 }
 
 /**
@@ -54,10 +55,15 @@ export async function verifyPassword(password, stored) {
   if (!stored) return { ok: false, needsUpgrade: false }
   if (stored.startsWith(PREFIX)) {
     const parts = stored.split('$')
-    if (parts.length !== 4) return { ok: false, needsUpgrade: false }
-    const salt = b64ToBuf(parts[2])
-    const expected = b64ToBuf(parts[3])
-    const key = await deriveKey(password, salt)
+    // 新格式 5 段（含迭代次数）；兼容旧格式 4 段（用当前默认迭代次数）
+    if (parts.length !== 4 && parts.length !== 5) return { ok: false, needsUpgrade: false }
+    const iter = parts.length === 5 ? parseInt(parts[2], 10) : ITERATIONS
+    const saltIdx = parts.length === 5 ? 3 : 2
+    const keyIdx = parts.length === 5 ? 4 : 3
+    if (!Number.isFinite(iter) || iter < 1) return { ok: false, needsUpgrade: false }
+    const salt = b64ToBuf(parts[saltIdx])
+    const expected = b64ToBuf(parts[keyIdx])
+    const key = await deriveKey(password, salt, iter)
     if (key.length !== expected.length) return { ok: false, needsUpgrade: false }
     let diff = 0
     for (let i = 0; i < key.length; i++) diff |= key[i] ^ expected[i]
