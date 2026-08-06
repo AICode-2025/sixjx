@@ -368,6 +368,12 @@ app.get('/api/lottery/proxy', async (c) => {
   }
 })
 
+// ── Worker 入口 ──
+// SPA 模式（assets.not_found_handling = single-page-application）下：
+// 导航请求（浏览器 Sec-Fetch-Mode: navigate）不匹配静态资产时，由 assets 层自动回退
+// index.html，不会调用本 Worker；/api/* 等非导航请求才会进入 Hono。
+// 因此保持 Hono 作为默认导出即可，切勿改成 env.ASSETS.fetch 混合入口
+//（ASSETS 绑定未显式声明时不存在，会抛 1101）。
 export default app
 
 /**
