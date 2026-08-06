@@ -5,6 +5,7 @@
       <div class="table-wrap">
         <el-table :data="recentReports" stripe v-loading="loading" style="width:100%">
           <el-table-column prop="period_no" label="期号" width="100" />
+          <el-table-column prop="lottery_type" label="彩种" width="70" />
           <el-table-column prop="user_count" label="同步用户数" min-width="90" />
           <el-table-column prop="total_bet" label="总报单额" min-width="100" show-overflow-tooltip />
           <el-table-column prop="total_payout" label="总派发" min-width="100" show-overflow-tooltip />

@@ -14,9 +14,9 @@
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <el-tab-pane label="香港" name="hk">
+      <el-tab-pane label="澳门" name="mo">
         <div class="table-wrap">
-          <el-table :data="hkList" v-loading="loading" stripe border size="small" style="width:100%">
+          <el-table :data="moList" v-loading="loading" stripe border size="small" style="width:100%">
             <el-table-column prop="id" label="ID" width="60" />
             <el-table-column prop="period_no" label="期号" width="110" />
             <el-table-column prop="draw_date" label="日期" width="110" />
@@ -38,9 +38,9 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="澳门" name="mo">
+      <el-tab-pane label="香港" name="hk">
         <div class="table-wrap">
-          <el-table :data="moList" v-loading="loading" stripe border size="small" style="width:100%">
+          <el-table :data="hkList" v-loading="loading" stripe border size="small" style="width:100%">
             <el-table-column prop="id" label="ID" width="60" />
             <el-table-column prop="period_no" label="期号" width="110" />
             <el-table-column prop="draw_date" label="日期" width="110" />
@@ -66,14 +66,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const API_BASE = ''
 const token = () => sessionStorage.getItem('admin_token')
 const headers = () => ({ Authorization: `Bearer ${token()}` })
 
-const activeTab = ref('hk')
+// 澳门在前，香港在后
+const activeTab = ref('mo')
 const loading = ref(false)
 const refreshing = ref(false)
 const hkList = ref([])
@@ -106,7 +107,8 @@ function applyFilter() {
 
 function onTabChange() {
   yearFilter.value = String(new Date().getFullYear())
-  fetchData()
+  buildYearOptions()
+  applyFilter()
 }
 
 // 波色映射
@@ -132,28 +134,28 @@ function ballClass(n, isSpecial) {
   return ['ball', waveMap[wave] || 'ball-blue', isSpecial ? 'ball-special' : 'ball-flat']
 }
 
-async function fetchData() {
+// 拉取澳门/香港全量列表（两彩种分别缓存）
+async function fetchAllData() {
   loading.value = true
   try {
-    const res = await fetch(
-      `${API_BASE}/api/periods/${activeTab.value}/results`,
-      { headers: headers() }
-    )
-    const data = await res.json()
-    if (data.code === 0) {
-      const rows = data.data || []
-      if (activeTab.value === 'hk') hkAll.value = rows
-      else moAll.value = rows
-      buildYearOptions()
-      applyFilter()
-    } else {
-      ElMessage.error(data.message || '加载失败')
-    }
+    const [hkRes, moRes] = await Promise.all([
+      fetch(`${API_BASE}/api/periods/hk/results`, { headers: headers() }),
+      fetch(`${API_BASE}/api/periods/mo/results`, { headers: headers() })
+    ])
+    const [hkData, moData] = await Promise.all([hkRes.json(), moRes.json()])
+    if (hkData.code === 0) hkAll.value = hkData.data || []
+    if (moData.code === 0) moAll.value = moData.data || []
+    buildYearOptions()
+    applyFilter()
   } catch (_) {
     ElMessage.error('网络错误')
   } finally {
     loading.value = false
   }
+}
+
+async function fetchData() {
+  await fetchAllData()
 }
 
 async function refreshCurrent() {
@@ -162,7 +164,7 @@ async function refreshCurrent() {
     const res = await fetch(`${API_BASE}/api/${activeTab.value}`, { headers: headers() })
     const data = await res.json()
     ElMessage.info(data.data?.source === 'api' ? '已从API获取最新数据' : '使用缓存数据')
-    fetchData()
+    fetchAllData()
   } catch (_) {
     ElMessage.error('刷新失败')
   } finally {
@@ -170,7 +172,45 @@ async function refreshCurrent() {
   }
 }
 
-onMounted(fetchData)
+// ── 每天 21:35 自动刷新拉取（澳门在前，香港在后）──
+let autoTimer = null
+let autoRefreshedDate = ''
+
+async function autoRefresh() {
+  // 依次强制拉取外部数据源入库：澳门 → 香港
+  for (const t of ['mo', 'hk']) {
+    try {
+      await fetch(`${API_BASE}/api/${t}`, { headers: headers() })
+    } catch (_) {}
+  }
+  await fetchAllData()
+}
+
+function checkAutoRefresh() {
+  const now = new Date()
+  const today = now.toDateString()
+  if (autoRefreshedDate === today) return
+  if (now.getHours() === 21 && now.getMinutes() === 35) {
+    autoRefreshedDate = today
+    autoRefresh()
+  }
+}
+
+onMounted(async () => {
+  await fetchData()
+  // 兜底：已过今日 21:35 且当天尚未自动刷新过，进入页面立即补拉一次
+  const now = new Date()
+  if (autoRefreshedDate !== now.toDateString() &&
+      (now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 35))) {
+    autoRefreshedDate = now.toDateString()
+    autoRefresh()
+  }
+  autoTimer = setInterval(checkAutoRefresh, 60 * 1000)
+})
+
+onUnmounted(() => {
+  if (autoTimer) clearInterval(autoTimer)
+})
 </script>
 
 <style scoped>

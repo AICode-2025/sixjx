@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sync_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   activation_code TEXT NOT NULL,
+  device_id TEXT,
   period_no TEXT NOT NULL,
   lottery_id INTEGER DEFAULT 1,
   total_bet REAL DEFAULT 0,
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS sync_reports (
 CREATE INDEX IF NOT EXISTS idx_sync_period ON sync_reports(period_no);
 CREATE INDEX IF NOT EXISTS idx_sync_code ON sync_reports(activation_code);
 CREATE INDEX IF NOT EXISTS idx_sync_synced_at ON sync_reports(synced_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_reports_code_period ON sync_reports(activation_code, period_no);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_reports_code_period_lottery ON sync_reports(activation_code, period_no, lottery_id);
 CREATE TABLE IF NOT EXISTS sync_report_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_id INTEGER NOT NULL,
@@ -118,6 +119,19 @@ async function ensureDB(c) {
     }
   } catch (_) {}
 
+  // ── 存量库迁移（幂等，重复执行无副作用）──
+  // 1) 唯一键升级：旧 (activation_code, period_no) → (activation_code, period_no, lottery_id)
+  //    支持澳门/香港同号期并存；先清理历史完全重复行，避免唯一索引创建冲突
+  try {
+    await c.env.DB.prepare('DROP INDEX IF EXISTS idx_sync_reports_code_period').run()
+    await c.env.DB.prepare(`DELETE FROM sync_reports WHERE id NOT IN (
+      SELECT MAX(id) FROM sync_reports GROUP BY activation_code, period_no, lottery_id
+    )`).run()
+    await c.env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_reports_code_period_lottery ON sync_reports(activation_code, period_no, lottery_id)').run()
+  } catch (_) {}
+  // 2) 新增设备指纹列（已存在则忽略）
+  try { await c.env.DB.prepare('ALTER TABLE sync_reports ADD COLUMN device_id TEXT').run() } catch (_) {}
+
   dbReady = true
 }
 
@@ -182,7 +196,8 @@ app.get('/api/client/check-update', async (c) => {
   })
 })
 
-// 系统配置读取
+// 系统配置读取（需登录；中间件必须先于路由注册，Hono 按注册顺序执行）
+app.use('/api/system/api-config', authMiddleware())
 app.get('/api/system/api-config', async (c) => {
   const configs = await c.env.DB.prepare('SELECT * FROM api_config').all()
   const result = {}
@@ -196,22 +211,26 @@ app.get('/api/system/api-config', async (c) => {
 app.use('/api/auth/me', authMiddleware())
 app.use('/api/auth/change-password', authMiddleware())
 // sync-reports POST（客户端推送）免认证，GET（管理端查询）需登录
-app.use('/api/sync-reports', async (c, next) => {
+// 注意：Hono app.use(路径) 为精确匹配，必须同时注册 '/*' 通配覆盖子路由，否则子路由全部绕过鉴权
+const syncReportsGuard = async (c, next) => {
   if (c.req.method === 'POST') {
     return rateLimit({ max: 60, windowMs: 60 * 1000, label: 'sync-reports' })(c, next)
   }
   return authMiddleware()(c, next)
-})
-app.use('/api/system/api-config', authMiddleware())
+}
+app.use('/api/sync-reports', syncReportsGuard)
+app.use('/api/sync-reports/*', syncReportsGuard)
 app.use('/api/lottery/proxy', authMiddleware())
 // periods GET（客户端拉取）免认证，POST/PUT/DELETE（管理端操作）需登录
-app.use('/api/periods', async (c, next) => {
+const periodsGuard = async (c, next) => {
   if (c.req.method === 'GET') {
     await next()
   } else {
     return authMiddleware()(c, next)
   }
-})
+}
+app.use('/api/periods', periodsGuard)
+app.use('/api/periods/*', periodsGuard)
 
 app.route('/api/auth', auth)
 app.route('/api/sync-reports', syncReports)
