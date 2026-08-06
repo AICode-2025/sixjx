@@ -53,11 +53,11 @@ periods.post('/hk/batch', async (c) => {
   return c.json({ code: 0, data: { success, fail }, message: `导入完成：成功${success}条，失败${fail}条` })
 })
 
-// 手动生成未来一个月期号（从开奖日历采集，期号以采集源锚点顺延）
-periods.post('/hk/generate-month', async (c) => {
-  const items = await generateFutureFromCalendar(c)
+// 手动采集香港期号：开奖日期从官方日历（kjrq.html）采集，期号以采集源锚点（qishu.js）顺延
+periods.post('/hk/collect', async (c) => {
+  const items = await generateFutureFromCalendar(c, 366)
   if (items.length === 0) {
-    return c.json({ code: 1, message: '日历采集失败或已无未来期号可生成' })
+    return c.json({ code: 1, message: '日历采集失败或已无未来期号可采集' })
   }
   const ins = c.env.DB.prepare('INSERT OR IGNORE INTO hk_periods (period_no, draw_date) VALUES (?, ?)')
   let success = 0
@@ -65,7 +65,7 @@ periods.post('/hk/generate-month', async (c) => {
     await ins.bind(it.period_no, it.draw_date).run()
     success++
   }
-  return c.json({ code: 0, data: { list: items, success }, message: `生成完成：${success}条` })
+  return c.json({ code: 0, data: { list: items, success }, message: `采集完成：${success}条` })
 })
 
 // 更新香港期号
@@ -130,15 +130,15 @@ async function fetchHKNextIssue() {
   }
 }
 
-// 基于日历生成未来期号：日期取日历开奖日（今天起 31 天内），期号以 hqishu 为锚点顺延
-async function generateFutureFromCalendar(c) {
+// 基于日历生成未来期号：日期取日历开奖日（今天起 maxDays 天内，默认 31），期号以 hqishu 为锚点顺延
+async function generateFutureFromCalendar(c, maxDays = 31) {
   const dates = await fetchHKCalendarDates()
   if (dates.length === 0) return []
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const future = dates
     .filter(ds => new Date(ds + 'T00:00:00').getTime() >= today.getTime())
-    .slice(0, 31)
+    .slice(0, maxDays)
   if (future.length === 0) return []
 
   // 期号锚点：优先 qishu.js（hqishu 可能为 7 位完整期号或 3 位年内序号），失败时降级为已有最大期号顺延

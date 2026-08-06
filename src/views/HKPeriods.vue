@@ -3,20 +3,22 @@
     <div class="page-header">
       <h2>香港期号管理</h2>
       <div class="header-actions">
-        <el-button type="success" @click="generateMonth" :loading="generating">生成未来一个月</el-button>
+        <el-select v-model="selectedYear" placeholder="选择年份" style="width:120px">
+          <el-option v-for="y in yearOptions" :key="y" :label="`${y} 年`" :value="y" />
+        </el-select>
+        <el-button type="success" @click="collectPeriods" :loading="collecting">采集获取</el-button>
         <el-button type="warning" @click="importFromLocal">导入默认数据</el-button>
         <el-button type="primary" @click="showAdd = true">新增期号</el-button>
       </div>
     </div>
 
     <div class="table-wrap">
-      <div v-for="g in groups" :key="g.year" class="year-group">
-        <div class="year-title">{{ g.year }} 年（{{ g.items.length }} 期）</div>
-        <el-table :data="g.items" v-loading="loading" stripe border size="small" style="width:100%">
+      <div v-if="currentGroup" class="year-group">
+        <div class="year-title">{{ currentGroup.year }} 年（{{ currentGroup.items.length }} 期）</div>
+        <el-table :data="currentGroup.items" v-loading="loading" stripe border size="small" style="width:100%">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="period_no" label="期号" width="120" />
           <el-table-column prop="draw_date" label="开奖日期" width="140" />
-          <el-table-column prop="created_at" label="创建时间" width="170" />
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
               <el-tag v-if="isFuture(row.draw_date)" type="warning" size="small">待确认</el-tag>
@@ -71,15 +73,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const API_BASE = ''
 const token = () => sessionStorage.getItem('admin_token')
 
 const groups = ref([])
+const yearOptions = ref([])
+const selectedYear = ref('')
+const currentGroup = computed(() => groups.value.find(g => g.year === selectedYear.value) || null)
 const loading = ref(false)
-const generating = ref(false)
+const collecting = ref(false)
 const showAdd = ref(false)
 const showEdit = ref(false)
 const submitting = ref(false)
@@ -107,6 +112,11 @@ async function fetchList() {
           year: y,
           items: map[y].sort((a, b) => String(b.period_no).localeCompare(String(a.period_no)))
         }))
+      yearOptions.value = groups.value.map(g => g.year)
+      // 默认选中最新年份；若当前选择已失效则回退到最新年份
+      if (!selectedYear.value || !yearOptions.value.includes(selectedYear.value)) {
+        selectedYear.value = yearOptions.value[0] || ''
+      }
     } else ElMessage.error(data.message || '加载失败')
   } catch (_) {
     ElMessage.error('网络错误')
@@ -203,25 +213,25 @@ function isFuture(dateStr) {
   return d.getTime() > Date.now()
 }
 
-// 生成未来一个月期号（后端从开奖日历采集，期号以采集源锚点顺延，不做星期推算）
-async function generateMonth() {
-  generating.value = true
+// 采集获取期号（后端从官方开奖日历采集全年剩余开奖日，期号以采集源锚点顺延，不做星期推算）
+async function collectPeriods() {
+  collecting.value = true
   try {
-    const res = await fetch(`${API_BASE}/api/periods/hk/generate-month`, {
+    const res = await fetch(`${API_BASE}/api/periods/hk/collect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }
     })
     const data = await res.json()
     if (data.code === 0) {
-      ElMessage.success(`${data.message || '生成完成'}，待官方确认后开奖`)
+      ElMessage.success(`${data.message || '采集完成'}，待官方确认后开奖`)
       fetchList()
     } else {
-      ElMessage.error(data.message || '生成失败')
+      ElMessage.error(data.message || '采集失败')
     }
   } catch (_) {
     ElMessage.error('网络错误')
   } finally {
-    generating.value = false
+    collecting.value = false
   }
 }
 
