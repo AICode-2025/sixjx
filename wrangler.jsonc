@@ -16,12 +16,12 @@
     }
   ],
   // routes: 自定义域名 api.znjx.cc → 请在 Cloudflare Dashboard 手动配置
+  // Cron 为 UTC：13:32-13:40 UTC = 北京 21:32-21:40（开奖后拉取结果）
   "triggers": {
-    "crons": ["32-40/2 21 * * *"]
+    "crons": ["32-40/2 13 * * *"]
   },
-  "vars": {
-    "JWT_SECRET": "znjx-admin-secret-20260717"
-  },
+  // JWT_SECRET 属于敏感密钥，请勿提交到仓库：
+  // 通过 wrangler secret put JWT_SECRET 配置（长度至少16位），代码不再提供硬编码兜底
   "build": {
     "command": "npm run build"
   }

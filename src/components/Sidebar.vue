@@ -16,10 +16,6 @@
         <el-icon><DataAnalysis /></el-icon>
         <span>首页概览</span>
       </el-menu-item>
-      <el-menu-item index="/activation">
-        <el-icon><Key /></el-icon>
-        <span>激活码管理</span>
-      </el-menu-item>
       <el-menu-item index="/sync-reports">
         <el-icon><Document /></el-icon>
         <span>同步报表</span>
@@ -60,7 +56,6 @@ const route = useRoute()
 const activeMenu = computed(() => {
   const path = route.path
   if (path.startsWith('/dashboard')) return '/dashboard'
-  if (path.startsWith('/activation')) return '/activation'
   if (path.startsWith('/sync-reports')) return '/sync-reports'
   if (path.startsWith('/hk-periods')) return '/hk-periods'
   if (path.startsWith('/results')) return '/results'

@@ -2,7 +2,7 @@
  * 数据聚合与 API 发布模块
  * 路由挂载在 /api 下，无需认证（客户端调用）
  *
- * GET /api/init?code=xxx  验证激活码 + 返回全量数据
+ * GET /api/init          返回全量数据
  * GET /api/hk             手动刷新香港数据
  * GET /api/mo             手动刷新澳门数据
  */
@@ -13,17 +13,6 @@ import { extractRecords, normalizeRecord } from './normalizer.js'
 import { isCacheFresh, saveResults, getResults } from './cache.js'
 
 const aggregator = new Hono()
-
-// ── 工具函数 ──
-
-async function verifyCode(c, code) {
-  const item = await c.env.DB.prepare(
-    'SELECT * FROM activation_codes WHERE code = ?'
-  ).bind(code).first()
-  if (!item) return { valid: false, message: '激活码无效' }
-  if (item.status === 'disabled') return { valid: false, message: '激活码已被禁用' }
-  return { valid: true, data: item }
-}
 
 async function refreshHK(c) {
   const urls = await getAPIUrl(c)
@@ -57,14 +46,8 @@ async function refreshMacau(c) {
 
 // ── 路由定义 ──
 
-// GET /api/init?code=xxx - 返回完整数据（code 可选，提供时校验激活码）
+// GET /api/init - 返回完整数据
 aggregator.get('/init', async (c) => {
-  const code = c.req.query('code')
-  if (code) {
-    const verify = await verifyCode(c, code)
-    if (!verify.valid) return c.json({ code: 1, message: verify.message })
-  }
-
   const year = String(new Date().getFullYear())
   // 历史记录已在 D1，缓存新鲜（30 分钟内）时直接返回，避免每次请求都拉外部源导致响应缓慢
   const [hkFresh, moFresh] = await Promise.all([isCacheFresh(c, 'hk_results'), isCacheFresh(c, 'mo_results')])

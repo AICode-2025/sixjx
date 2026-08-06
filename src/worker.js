@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { auth } from './api/auth.js'
-import { activation } from './api/activation.js'
 import { syncReports } from './api/sync-reports.js'
 import { periods, syncHKPeriods } from './api/periods.js'
 import { aggregator } from './data-aggregator/index.js'
 import { authMiddleware } from './middleware/auth.js'
+import { rateLimit } from './util/rate-limit.js'
+import { hashPassword } from './util/password.js'
 import { fetchExternalAPI, getAPIUrl } from './data-aggregator/fetcher.js'
 import {
   extractRecords as extractRecordsAgg,
@@ -27,18 +28,6 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT DEFAULT 'super_admin',
   created_at TEXT DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS activation_codes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT UNIQUE NOT NULL,
-  device_id TEXT,
-  device_name TEXT,
-  issuer TEXT DEFAULT '',
-  status TEXT DEFAULT 'unactivated',
-  activated_at TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_activation_code ON activation_codes(code);
-CREATE INDEX IF NOT EXISTS idx_activation_status ON activation_codes(status);
 CREATE TABLE IF NOT EXISTS sync_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   activation_code TEXT NOT NULL,
@@ -53,6 +42,7 @@ CREATE TABLE IF NOT EXISTS sync_reports (
 CREATE INDEX IF NOT EXISTS idx_sync_period ON sync_reports(period_no);
 CREATE INDEX IF NOT EXISTS idx_sync_code ON sync_reports(activation_code);
 CREATE INDEX IF NOT EXISTS idx_sync_synced_at ON sync_reports(synced_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_reports_code_period ON sync_reports(activation_code, period_no);
 CREATE TABLE IF NOT EXISTS sync_report_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_id INTEGER NOT NULL,
@@ -73,7 +63,6 @@ CREATE TABLE IF NOT EXISTS api_config (
   key TEXT UNIQUE NOT NULL,
   value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', '123456', 'super_admin');
 CREATE TABLE IF NOT EXISTS hk_periods (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   period_no TEXT UNIQUE NOT NULL,
@@ -111,6 +100,24 @@ async function ensureDB(c) {
   for (const sql of stmts) {
     try { await c.env.DB.prepare(sql).run() } catch (_) {}
   }
+  // 默认管理员：首次部署用 PBKDF2 哈希种子；存量库残留明文密码原地升级为哈希
+  try {
+    const userCount = await c.env.DB.prepare('SELECT COUNT(*) AS cnt FROM users').first()
+    if (!userCount || userCount.cnt === 0) {
+      const hashed = await hashPassword('123456')
+      await c.env.DB.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)')
+        .bind('admin', hashed, 'super_admin').run()
+    } else {
+      const users = await c.env.DB.prepare('SELECT id, username, password FROM users').all()
+      for (const u of (users.results || [])) {
+        if (u.password && !u.password.startsWith('pbkdf2$v1$')) {
+          const hashed = await hashPassword(u.password)
+          await c.env.DB.prepare('UPDATE users SET password = ? WHERE id = ?').bind(hashed, u.id).run()
+        }
+      }
+    }
+  } catch (_) {}
+
   dbReady = true
 }
 
@@ -121,6 +128,9 @@ app.use('*', async (c, next) => {
   }
   await next()
 })
+
+// 公开接口限流（登录）
+app.use('/api/auth/login', rateLimit({ max: 10, windowMs: 60 * 1000, label: 'login' }))
 
 // ── 公开路由（不需要登录）──
 
@@ -182,45 +192,15 @@ app.get('/api/system/api-config', async (c) => {
   return c.json({ code: 0, data: result })
 })
 
-// 激活码验证（用户端APP调用）
-app.post('/api/activation/verify', async (c) => {
-  const { code } = await c.req.json()
-  const item = await c.env.DB.prepare(
-    'SELECT * FROM activation_codes WHERE code = ?'
-  ).bind(code).first()
-  if (!item) return c.json({ code: 1, message: '激活码无效' })
-  if (item.status === 'disabled') return c.json({ code: 1, message: '激活码已被禁用' })
-  return c.json({ code: 0, data: { status: item.status, device_id: item.device_id } })
-})
-
-// 注册设备（用户端APP调用）
-app.post('/api/activation/register', async (c) => {
-  const { code, device_id, device_name } = await c.req.json()
-  const item = await c.env.DB.prepare(
-    'SELECT * FROM activation_codes WHERE code = ?'
-  ).bind(code).first()
-  if (!item) return c.json({ code: 1, message: '激活码无效' })
-  if (item.status === 'disabled') return c.json({ code: 1, message: '激活码已被禁用' })
-  if (item.status === 'activated' && item.device_id !== device_id) {
-    return c.json({ code: 1, message: '激活码已被其他设备绑定' })
-  }
-  await c.env.DB.prepare(
-    "UPDATE activation_codes SET device_id = ?, device_name = ?, status = 'activated', activated_at = datetime('now') WHERE code = ?"
-  ).bind(device_id, device_name || '', code).run()
-  return c.json({ code: 0, message: '激活成功' })
-})
-
 // ── 需要认证的路由 ──
 app.use('/api/auth/me', authMiddleware())
 app.use('/api/auth/change-password', authMiddleware())
-app.use('/api/activation', authMiddleware())
 // sync-reports POST（客户端推送）免认证，GET（管理端查询）需登录
 app.use('/api/sync-reports', async (c, next) => {
   if (c.req.method === 'POST') {
-    await next()
-  } else {
-    return authMiddleware()(c, next)
+    return rateLimit({ max: 60, windowMs: 60 * 1000, label: 'sync-reports' })(c, next)
   }
+  return authMiddleware()(c, next)
 })
 app.use('/api/system/api-config', authMiddleware())
 app.use('/api/lottery/proxy', authMiddleware())
@@ -234,7 +214,6 @@ app.use('/api/periods', async (c, next) => {
 })
 
 app.route('/api/auth', auth)
-app.route('/api/activation', activation)
 app.route('/api/sync-reports', syncReports)
 app.route('/api/periods', periods)
 app.route('/api', aggregator)
@@ -412,7 +391,7 @@ async function syncLatestToDB(c, table, url) {
   console.log(`[Cron] ${table}: 解析 ${normalized.length} 条，写入最新 ${n} 条`)
 }
 
-// Cron Trigger: 每天21:32-21:40每2分钟拉取开奖结果并入库
+// Cron Trigger（Cloudflare Cron 为 UTC）：每天 13:32-13:40 UTC（北京 21:32-21:40）每2分钟拉取开奖结果并入库
 // 澳门 21:33-21:36 出结果，香港开奖日 21:30 出结果；INSERT OR IGNORE 幂等可重复执行
 export async function scheduled(event, env, ctx) {
   const c = { env }

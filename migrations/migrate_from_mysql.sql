@@ -5,8 +5,9 @@
 -- ========================================
 
 -- 1. VPS 上导出 MySQL 数据
--- mysqldump -u 1688vip_xyz -p'cME5k5Jiw1h72kYs' 1688vip_xyz activation_codes --no-create-info --compatible=ansi --skip-extended-insert > activation_codes.sql
--- mysqldump -u 1688vip_xyz -p'cME5k5Jiw1h72kYs' 1688vip_xyz sync_reports --no-create-info --compatible=ansi --skip-extended-insert > sync_reports.sql
+-- 注意：原文件包含生产 MySQL 账号密码，已脱敏删除。请使用实际数据库账号执行：
+-- mysqldump -u <DB_USER> -p'<DB_PASSWORD>' 1688vip_xyz activation_codes --no-create-info --compatible=ansi --skip-extended-insert > activation_codes.sql
+-- mysqldump -u <DB_USER> -p'<DB_PASSWORD>' 1688vip_xyz sync_reports --no-create-info --compatible=ansi --skip-extended-insert > sync_reports.sql
 
 -- 2. 手动替换:
 --    ` → (去掉)

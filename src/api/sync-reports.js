@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { toBeijing, beijingDateToUtc } from '../util/time.js'
 
 const syncReports = new Hono()
 
@@ -28,7 +29,7 @@ syncReports.get('/', async (c) => {
         total_bet: Math.round(r.total_bet || 0),
         total_payout: Math.round(r.total_payout || 0),
         total_profit: Math.round(r.total_profit || 0),
-        last_synced: r.last_synced || ''
+        last_synced: toBeijing(r.last_synced || '')
       })),
       total: totalRow.t,
       page, pageSize
@@ -50,12 +51,13 @@ syncReports.get('/number-stats', async (c) => {
     binds.push(periodNo)
   }
   if (dateFrom) {
+    // 北京日期 → UTC 边界（库内 synced_at 为 UTC）
     where += ' AND r.synced_at >= ?'
-    binds.push(dateFrom)
+    binds.push(beijingDateToUtc(dateFrom))
   }
   if (dateTo) {
     where += ' AND r.synced_at <= ?'
-    binds.push(dateTo + ' 23:59:59')
+    binds.push(beijingDateToUtc(dateTo, true))
   }
 
   const rows = await c.env.DB.prepare(`
@@ -121,11 +123,11 @@ syncReports.get('/summary', async (c) => {
 
   if (dateFrom) {
     where += ' AND synced_at >= ?'
-    binds.push(dateFrom)
+    binds.push(beijingDateToUtc(dateFrom))
   }
   if (dateTo) {
     where += ' AND synced_at <= ?'
-    binds.push(dateTo + ' 23:59:59')
+    binds.push(beijingDateToUtc(dateTo, true))
   }
 
   const result = await c.env.DB.prepare(`
@@ -150,7 +152,8 @@ syncReports.get('/detail/:periodNo', async (c) => {
     ORDER BY activation_code
   `).bind(periodNo).all()
 
-  return c.json({ code: 0, data: list.results })
+  const rows = (list.results || []).map(r => ({ ...r, synced_at: toBeijing(r.synced_at || '') }))
+  return c.json({ code: 0, data: rows })
 })
 
 // ─── 用户列表 ───
@@ -170,8 +173,8 @@ syncReports.get('/export', async (c) => {
   let where = 'WHERE 1=1'
   const binds = []
 
-  if (dateFrom) { where += ' AND synced_at >= ?'; binds.push(dateFrom) }
-  if (dateTo) { where += ' AND synced_at <= ?'; binds.push(dateTo + ' 23:59:59') }
+  if (dateFrom) { where += ' AND synced_at >= ?'; binds.push(beijingDateToUtc(dateFrom)) }
+  if (dateTo) { where += ' AND synced_at <= ?'; binds.push(beijingDateToUtc(dateTo, true)) }
 
   const data = await c.env.DB.prepare(`
     SELECT period_no, activation_code, total_bet, total_payout, total_profit, synced_at
@@ -181,7 +184,7 @@ syncReports.get('/export', async (c) => {
 
   const header = '期号,激活码,报单额,派发,盈亏,同步时间\n'
   const rows = data.results.map(r =>
-    `${r.period_no},${r.activation_code},${r.total_bet},${r.total_payout},${r.total_profit},${r.synced_at}`
+    `${r.period_no},${r.activation_code},${r.total_bet},${r.total_payout},${r.total_profit},${toBeijing(r.synced_at || '')}`
   ).join('\n')
 
   return c.text('\uFEFF' + header + rows, 200, {
@@ -195,8 +198,48 @@ syncReports.post('/', async (c) => {
   const body = await c.req.json()
   const { activation_code, period_no, lottery_id, lottery_type, total_bet, total_payout, total_profit, items } = body
 
-  if (!activation_code || !period_no) {
-    return c.json({ code: 1, message: '缺少必要参数' })
+  // ── 基础校验 ──
+  if (!activation_code || typeof activation_code !== 'string' || activation_code.length > 64) {
+    return c.json({ code: 1, message: '激活码缺失或格式错误' })
+  }
+  if (!period_no || typeof period_no !== 'string' || !/^\d{5,9}$/.test(period_no)) {
+    return c.json({ code: 1, message: '期号缺失或格式错误' })
+  }
+  const lid = lottery_id === 2 ? 2 : 1
+
+  const bet = Number(total_bet) || 0
+  const payout = Number(total_payout) || 0
+  const profit = Number(total_profit) || 0
+  if (!isFinite(bet) || !isFinite(payout) || !isFinite(profit) || bet < 0 || payout < 0) {
+    return c.json({ code: 1, message: '金额参数不合法' })
+  }
+
+  // 明细校验（防超大报文/非法数值）
+  let itemsList = []
+  if (items && Array.isArray(items)) {
+    if (items.length > 500) {
+      return c.json({ code: 1, message: '明细条数过多（上限500）' })
+    }
+    for (const item of items) {
+      const amt = Number(item.amount || item.total_amount || 0)
+      const pay = Number(item.payout || item.total_payout || 0)
+      const cnt = Number(item.bet_count || item.total_count || 0)
+      if (!isFinite(amt) || !isFinite(pay) || !isFinite(cnt) || amt < 0 || pay < 0 || cnt < 0) {
+        return c.json({ code: 1, message: '明细金额参数不合法' })
+      }
+      if (typeof item.bet_number === 'string' && item.bet_number.length > 200) {
+        return c.json({ code: 1, message: '投注号码过长' })
+      }
+      itemsList.push(item)
+    }
+  }
+
+  // 幂等：同一激活码同一期号仅保留一条主报表，重复上报直接跳过
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM sync_reports WHERE activation_code = ? AND period_no = ?'
+  ).bind(activation_code, period_no).first()
+  if (existing) {
+    return c.json({ code: 0, message: '该期已上报（跳过重复）' })
   }
 
   // 创建主报表
@@ -204,28 +247,28 @@ syncReports.post('/', async (c) => {
     INSERT INTO sync_reports (activation_code, period_no, lottery_id, total_bet, total_payout, total_profit)
     VALUES (?, ?, ?, ?, ?, ?)
   `).bind(
-    activation_code, period_no, lottery_id || 1,
-    total_bet || 0, total_payout || 0, total_profit || 0
+    activation_code, period_no, lid,
+    bet, payout, profit
   ).run()
 
   const reportId = result.meta.last_row_id
 
   // 写入明细項目
-  if (items && Array.isArray(items) && items.length > 0) {
+  if (itemsList.length > 0) {
     const stmt = c.env.DB.prepare(`
       INSERT INTO sync_report_items (report_id, lottery_type, period_no, bet_number, play_type, total_amount, total_payout, total_count)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    for (const item of items) {
+    for (const item of itemsList) {
       await stmt.bind(
         reportId,
         item.lottery_type || lottery_type || '澳门',
         period_no,
         item.bet_number || '',
         item.play_type || '特',
-        item.amount || 0,
-        item.payout || 0,
-        item.bet_count || 0
+        Number(item.amount || item.total_amount || 0),
+        Number(item.payout || item.total_payout || 0),
+        Number(item.bet_count || item.total_count || 0)
       ).run()
     }
   }

@@ -61,7 +61,3 @@ CREATE TABLE IF NOT EXISTS api_config (
   key TEXT UNIQUE NOT NULL,
   value TEXT NOT NULL
 );
-
--- 插入默认管理员
-INSERT OR IGNORE INTO users (username, password, role) VALUES
-  ('admin', '123456', 'super_admin');

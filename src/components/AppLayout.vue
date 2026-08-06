@@ -79,7 +79,6 @@ const currentRoute = ref('/dashboard')
 
 const bottomTabs = [
   { path: '/dashboard', label: '概览', icon: 'DataAnalysis' },
-  { path: '/activation', label: '激活码', icon: 'Key' },
   { path: '/sync-reports', label: '报表', icon: 'TrendCharts' },
   { path: '/hk-periods', label: '期号', icon: 'Calendar' },
   { path: '/results', label: '历史', icon: 'List' },
@@ -87,7 +86,7 @@ const bottomTabs = [
 ]
 
 const pageTitle = computed(() => {
-  const map = { '/dashboard': '首页概览', '/activation': '激活码管理', '/sync-reports': '同步报表', '/hk-periods': '期号管理', '/results': '开奖历史', '/settings': '系统设置' }
+  const map = { '/dashboard': '首页概览', '/sync-reports': '同步报表', '/hk-periods': '期号管理', '/results': '开奖历史', '/settings': '系统设置' }
   return map[currentRoute.value] || '数据分析系统'
 })
 

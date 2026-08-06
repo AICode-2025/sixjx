@@ -8,7 +8,6 @@ const routes = [
     redirect: '/dashboard',
     children: [
       { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
-      { path: 'activation', name: 'Activation', component: () => import('../views/Activation.vue') },
       { path: 'sync-reports', name: 'SyncReports', component: () => import('../views/SyncReports.vue') },
       { path: 'hk-periods', name: 'HKPeriods', component: () => import('../views/HKPeriods.vue') },
       { path: 'results', name: 'Results', component: () => import('../views/ResultsView.vue') },
